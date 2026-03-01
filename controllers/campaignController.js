@@ -1,12 +1,10 @@
 import { ObjectId } from "mongodb";
 import { connection } from "../config/dbconfig.js";
-
 import XLSX from "xlsx";
 
 export const createCampaign = async (req, res) => {
   try {
-    const { name, role, template, followUpTemplate, followUpDelayDays } =
-      req.body;
+    const { name, role, subject, template } = req.body;
 
     let hrList = [];
 
@@ -25,18 +23,22 @@ export const createCampaign = async (req, res) => {
           });
 
           return {
+            _id: new ObjectId(),
             name: normalizedRow.name || "",
             email: normalizedRow.email || "",
             company: normalizedRow.company || "",
+            status: "not_sent",
+            error: null,
+            sentAt: null,
           };
         })
         .filter((hr) => hr.name && hr.email);
     }
 
-    if (!name || !role || !template || !hrList.length) {
+    if (!name || !role || !subject || !template || !hrList.length) {
       return res.status(400).json({
         success: false,
-        message: "Name, role, template and HR file are required",
+        message: "Name, role, subject, template and HR file are required",
       });
     }
 
@@ -46,9 +48,11 @@ export const createCampaign = async (req, res) => {
     const newCampaign = {
       name,
       role,
+      subject,
       template,
-      followUpTemplate: followUpTemplate || "",
-      followUpDelayDays: followUpDelayDays || 3,
+      status: "draft",
+      totalSent: 0,
+      totalFailed: 0,
       hrList,
       user: new ObjectId(req.user.id),
       createdAt: new Date(),
@@ -69,6 +73,38 @@ export const createCampaign = async (req, res) => {
     });
   }
 };
+
+export const getSingleCampaign = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const db = await connection();
+    const campaignCollection = db.collection("campaigns");
+
+    const campaign = await campaignCollection.findOne({
+      _id: new ObjectId(id),
+      user: new ObjectId(req.user.id),
+    });
+
+    if (!campaign) {
+      return res.status(404).json({
+        success: false,
+        message: "Campaign not found",
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      campaign,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
 
 export const getCampaigns = async (req, res) => {
   try {
@@ -93,34 +129,37 @@ export const getCampaigns = async (req, res) => {
   }
 };
 
+
 export const updateCampaign = async (req, res) => {
   try {
     const { id } = req.params;
+    const { name, role, subject, template } = req.body;
 
     const db = await connection();
     const campaignCollection = db.collection("campaigns");
 
-    const campaign = await campaignCollection.findOne({
-      _id: new ObjectId(id),
-      user: new ObjectId(req.user.id),
-    });
-
-    if (!campaign) {
-      return res.status(404).json({
-        success: false,
-        message: "Campaign not found",
-      });
-    }
-
-    await campaignCollection.updateOne(
-      { _id: new ObjectId(id) },
+    const result = await campaignCollection.updateOne(
+      {
+        _id: new ObjectId(id),
+        user: new ObjectId(req.user.id),
+      },
       {
         $set: {
-          ...req.body,
+          name,
+          role,
+          subject,
+          template,
           updatedAt: new Date(),
         },
-      },
+      }
     );
+
+    if (!result.matchedCount) {
+      return res.status(404).json({
+        success: false,
+        message: "Campaign not found or already started",
+      });
+    }
 
     res.status(200).json({
       success: true,
@@ -134,6 +173,7 @@ export const updateCampaign = async (req, res) => {
   }
 };
 
+
 export const deleteCampaign = async (req, res) => {
   try {
     const { id } = req.params;
@@ -144,12 +184,13 @@ export const deleteCampaign = async (req, res) => {
     const result = await campaignCollection.deleteOne({
       _id: new ObjectId(id),
       user: new ObjectId(req.user.id),
+      status: "draft", // prevent deleting running campaigns
     });
 
     if (result.deletedCount === 0) {
       return res.status(404).json({
         success: false,
-        message: "Campaign not found",
+        message: "Campaign not found or already started",
       });
     }
 
