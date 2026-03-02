@@ -1,14 +1,88 @@
 import jwt from "jsonwebtoken";
 import { connection } from "../config/dbconfig.js";
+import { ObjectId } from "mongodb";
 import dotenv from "dotenv";
-
+import nodemailer from "nodemailer";
 dotenv.config();
 
 const JWT_SECRET = process.env.JWT_SECRET;
 
-// ========================
-// SIGNUP
-// ========================
+export const configureEmail = async (req, res) => {
+  try {
+    const { appPassword } = req.body;
+
+    if (!appPassword) {
+      return res.status(400).json({
+        success: false,
+        message: "App password is required",
+      });
+    }
+
+    const db = await connection();
+    const collection = db.collection("users");
+
+    const user = await collection.findOne({
+      _id: new ObjectId(req.user.id),
+    });
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    const transporter = nodemailer.createTransport({
+  host: "smtp.gmail.com",
+  port: 587,
+  secure: false,
+  auth: {
+    user: user.email,
+    pass: appPassword,
+  },
+});
+
+    try {
+      await transporter.verify();
+    } catch (error) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid Gmail App Password or Gmail not configured properly",
+      });
+    }
+
+    try {
+      await transporter.sendMail({
+        from: `"HireReach" <${user.email}>`,
+        to: user.email,
+        subject: "HireReach Email Connected Successfully",
+        text: "Your Gmail is successfully connected to HireReach.",
+      });
+    } catch (error) {
+      return res.status(500).json({
+        success: false,
+        message: "Connection verified but failed to send test email",
+      });
+    }
+
+    await collection.updateOne(
+      { _id: new ObjectId(req.user.id) },
+      { $set: { emailAppPassword: appPassword } },
+    );
+
+    return res.json({
+      success: true,
+      message: "Gmail verified and test email sent successfully ✅",
+    });
+  } catch (error) {
+    console.error("Configure Email Error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Server error",
+    });
+  }
+};
+
 export const SignUp = async (req, res) => {
   try {
     const { name, email, password } = req.body;
@@ -36,6 +110,7 @@ export const SignUp = async (req, res) => {
       name,
       email,
       password,
+      emailAppPassword: null,
       createdAt: new Date(),
     };
 
@@ -74,9 +149,7 @@ export const SignUp = async (req, res) => {
   }
 };
 
-// ========================
-// LOGIN
-// ========================
+
 export const Login = async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -108,7 +181,6 @@ export const Login = async (req, res) => {
       email: result.email,
     };
 
-    // ✅ FIXED JWT SIGN
     const token = jwt.sign(tokenData, JWT_SECRET, {
       expiresIn: "5d",
     });
@@ -124,7 +196,6 @@ export const Login = async (req, res) => {
       success: true,
       message: "Login successful",
     });
-
   } catch (error) {
     return res.status(500).json({
       success: false,
