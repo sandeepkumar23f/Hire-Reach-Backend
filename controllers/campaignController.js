@@ -1,44 +1,51 @@
 import { ObjectId } from "mongodb";
-import { connection } from "../config/dbconfig.js";
+import { connection } from "../src/config/dbconfig.js";
 import XLSX from "xlsx";
-
 export const createCampaign = async (req, res) => {
   try {
     const { name, role, subject, template } = req.body;
 
-    let hrList = [];
-
-    if (req.file) {
-      const workbook = XLSX.read(req.file.buffer, { type: "buffer" });
-      const sheetName = workbook.SheetNames[0];
-      const sheet = workbook.Sheets[sheetName];
-
-      const jsonData = XLSX.utils.sheet_to_json(sheet);
-
-      hrList = jsonData
-        .map((row) => {
-          const normalizedRow = {};
-          Object.keys(row).forEach((key) => {
-            normalizedRow[key.toLowerCase().trim()] = row[key];
-          });
-
-          return {
-            _id: new ObjectId(),
-            name: normalizedRow.name || "",
-            email: normalizedRow.email || "",
-            company: normalizedRow.company || "",
-            status: "not_sent",
-            error: null,
-            sentAt: null,
-          };
-        })
-        .filter((hr) => hr.name && hr.email);
-    }
-
-    if (!name || !role || !subject || !template || !hrList.length) {
+    if (!name || !role || !template) {
       return res.status(400).json({
         success: false,
-        message: "Name, role, subject, template and HR file are required",
+        message: "Name, role and template are required",
+      });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        message: "HR file is required",
+      });
+    }
+
+    const workbook = XLSX.read(req.file.buffer, { type: "buffer" });
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+    const jsonData = XLSX.utils.sheet_to_json(sheet);
+
+    const hrList = jsonData
+      .map((row) => {
+        const normalized = {};
+        Object.keys(row).forEach((key) => {
+          normalized[key.toLowerCase().trim()] = row[key];
+        });
+
+        return {
+          _id: new ObjectId(),
+          name: normalized.name || "",
+          email: normalized.email || "",
+          company: normalized.company || "",
+          status: "not_sent",
+          error: null,
+          sentAt: null,
+        };
+      })
+      .filter((hr) => hr.name && hr.email);
+
+    if (!hrList.length) {
+      return res.status(400).json({
+        success: false,
+        message: "No valid HR records found",
       });
     }
 
@@ -48,11 +55,12 @@ export const createCampaign = async (req, res) => {
     const newCampaign = {
       name,
       role,
-      subject,
+      subject: subject || `${role} Opportunity`,
       template,
       status: "draft",
       totalSent: 0,
       totalFailed: 0,
+      totalCount: hrList.length,
       hrList,
       user: new ObjectId(req.user.id),
       createdAt: new Date(),
@@ -63,17 +71,14 @@ export const createCampaign = async (req, res) => {
 
     res.status(201).json({
       success: true,
-      message: "Campaign created successfully",
       campaignId: result.insertedId,
     });
+
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    console.error("Create Campaign Error:", error);
+    res.status(500).json({ success: false, message: "Server error" });
   }
 };
-
 export const getSingleCampaign = async (req, res) => {
   try {
     const { id } = req.params;
@@ -205,3 +210,41 @@ export const deleteCampaign = async (req, res) => {
     });
   }
 };
+
+export const startCampaign = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user.id;
+
+    const db = await connection();
+    const campaignCollection = db.collection("campaigns");
+
+    const campaign = await campaignCollection.findOne({
+      _id: new ObjectId(id),
+      user: new ObjectId(userId),
+    });
+
+    if (!campaign)
+      return res.status(404).json({ success: false, message: "Campaign not found" });
+
+    if (campaign.status !== "draft")
+      return res.status(400).json({ success: false, message: "Already started" });
+
+    await campaignCollection.updateOne(
+      { _id: new ObjectId(id) },
+      {
+        $set: {
+          status: "sending",
+          startedAt: new Date(),
+        },
+      }
+    );
+
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false });
+  }
+};
+

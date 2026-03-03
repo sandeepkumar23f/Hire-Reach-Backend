@@ -2,9 +2,10 @@ import express from "express"
 import cors from "cors"
 import dotenv from "dotenv"
 import cookieParser from "cookie-parser"
-import { connection } from "./config/dbconfig.js"
+import { connection } from "./src/config/dbconfig.js"
 import authRoutes from "./routes/authRoutes.js"
 import campaignRoutes from "./routes/campaignRoutes.js"
+import { startEmailWorker } from "./src/workers/emailWorker.js"
 dotenv.config()
 const app = express()
 const allowedOrigins = [
@@ -29,4 +30,5 @@ app.use("/api/auth",authRoutes)
 app.use("/api/campaigns",campaignRoutes)
 app.listen(port,(req,res)=>{
     console.log(`app is running on port ${port}`)
+    startEmailWorker()
 })
