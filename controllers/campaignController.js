@@ -73,7 +73,6 @@ export const createCampaign = async (req, res) => {
       success: true,
       campaignId: result.insertedId,
     });
-
   } catch (error) {
     console.error("Create Campaign Error:", error);
     res.status(500).json({ success: false, message: "Server error" });
