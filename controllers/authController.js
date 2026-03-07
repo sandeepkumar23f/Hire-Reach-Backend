@@ -85,9 +85,9 @@ export const configureEmail = async (req, res) => {
 
 export const SignUp = async (req, res) => {
   try {
-    const { name, email, password } = req.body;
+    const { name, email, password, appPassword } = req.body;
 
-    if (!name || !email || !password) {
+    if (!name || !email || !password || !appPassword) {
       return res.status(400).json({
         success: false,
         message: "All fields are required",
@@ -110,7 +110,7 @@ export const SignUp = async (req, res) => {
       name,
       email,
       password,
-      emailAppPassword: null,
+      emailAppPassword: appPassword, // ✅ SAVE APP PASSWORD
       createdAt: new Date(),
     };
 
@@ -142,13 +142,14 @@ export const SignUp = async (req, res) => {
       },
     });
   } catch (error) {
+    console.error("Signup Error:", error);
+
     return res.status(500).json({
       success: false,
       message: "Server error",
     });
   }
 };
-
 
 export const Login = async (req, res) => {
   try {
