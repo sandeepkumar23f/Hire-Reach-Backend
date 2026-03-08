@@ -12,13 +12,22 @@ dotenv.config();
 
 const app = express();
 
-const allowedOrigins = ["http://localhost:3000"];
+const allowedOrigins = [
+  "http://localhost:3000",
+  "https://hire-reach-web-app.vercel.app"
+];
 
 const port = process.env.PORT || 5000;
 
 app.use(
   cors({
-    origin: allowedOrigins,
+    origin: function (origin, callback) {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error("CORS not allowed"));
+      }
+    },
     credentials: true,
   })
 );
@@ -30,12 +39,16 @@ app.use("/api/auth", authRoutes);
 app.use("/api/campaigns", campaignRoutes);
 
 const startServer = async () => {
-  await connection();
+  try {
+    await connection();
 
-  app.listen(port, () => {
-    console.log(`🚀 Server running on port ${port}`);
-    startEmailWorker();
-  });
+    app.listen(port, () => {
+      console.log(`🚀 Server running on port ${port}`);
+      startEmailWorker();
+    });
+  } catch (error) {
+    console.error("Server startup error:", error);
+  }
 };
 
 startServer();
