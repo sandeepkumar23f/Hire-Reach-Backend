@@ -1,5 +1,5 @@
 import { ObjectId } from "mongodb";
-import { connection } from "../src/config/dbconfig.js";
+import { connection } from "../config/dbconfig.js";
 import XLSX from "xlsx";
 export const createCampaign = async (req, res) => {
   try {

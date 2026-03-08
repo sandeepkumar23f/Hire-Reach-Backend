@@ -1,6 +1,6 @@
 import nodemailer from "nodemailer";
 import { ObjectId } from "mongodb";
-import { connection } from "../config/dbconfig.js";
+import { connection } from "../../config/dbconfig.js";
 
 const processCampaigns = async () => {
   try {

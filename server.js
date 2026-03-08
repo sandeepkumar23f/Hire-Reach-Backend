@@ -3,7 +3,7 @@ import cors from "cors";
 import dotenv from "dotenv";
 import cookieParser from "cookie-parser";
 
-import { connection } from "./src/config/dbconfig.js";
+import { connection } from "./config/dbconfig.js";
 import authRoutes from "./routes/authRoutes.js";
 import campaignRoutes from "./routes/campaignRoutes.js";
 import { startEmailWorker } from "./src/workers/emailWorker.js";
