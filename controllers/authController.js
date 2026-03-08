@@ -1,5 +1,5 @@
 import jwt from "jsonwebtoken";
-import { connection } from "../config/dbconfig.js";
+import { connection } from "../src/config/dbconfig.js";
 import { ObjectId } from "mongodb";
 import dotenv from "dotenv";
 import nodemailer from "nodemailer";
