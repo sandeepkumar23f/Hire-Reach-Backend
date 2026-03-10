@@ -14,7 +14,7 @@ const app = express();
 
 const allowedOrigins = [
   "http://localhost:3000",
-  "https://hire-reach-web-app.vercel.app"
+  "https://hire-reach-web.vercel.app"
 ];
 
 const port = process.env.PORT || 5000;
