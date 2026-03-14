@@ -210,6 +210,8 @@ export const deleteCampaign = async (req, res) => {
   }
 };
 
+const MAX_DAILY_EMAILS = 150;
+
 export const startCampaign = async (req, res) => {
   try {
     const { id } = req.params;
@@ -224,10 +226,48 @@ export const startCampaign = async (req, res) => {
     });
 
     if (!campaign)
-      return res.status(404).json({ success: false, message: "Campaign not found" });
+      return res.status(404).json({
+        success: false,
+        message: "Campaign not found",
+      });
 
     if (campaign.status !== "draft")
-      return res.status(400).json({ success: false, message: "Already started" });
+      return res.status(400).json({
+        success: false,
+        message: "Already started",
+      });
+
+    const now = new Date();
+
+    const startOfDay = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate()
+    );
+
+    const emailsSentToday = await campaignCollection.countDocuments({
+      user: new ObjectId(userId),
+      status: "sent",
+      sentAt: { $gte: startOfDay },
+    });
+
+    if (emailsSentToday >= MAX_DAILY_EMAILS) {
+      
+      // midnight reset
+      const resetAt = new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        now.getDate() + 1
+      );
+
+      return res.status(429).json({
+        success: false,
+        limitReached: true,
+        emailsSentToday,
+        maxLimit: MAX_DAILY_EMAILS,
+        resetAt,
+      });
+    }
 
     await campaignCollection.updateOne(
       { _id: new ObjectId(id) },
@@ -239,11 +279,14 @@ export const startCampaign = async (req, res) => {
       }
     );
 
+    res.json({
+      success: true,
+      emailsSentToday,
+      maxLimit: MAX_DAILY_EMAILS,
+    });
 
-    res.json({ success: true });
   } catch (err) {
     console.error(err);
     res.status(500).json({ success: false });
   }
 };
-
